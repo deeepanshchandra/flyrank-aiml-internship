@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Predicting Search Visibility Loss | FlyRank Capstone</title>
+<meta name="description" content="A client-held-out Random Forest model for prioritizing content review from measured search signals.">
+<style>
+:root{--bg:#f6f7f9;--paper:#fff;--ink:#17202a;--muted:#5f6b76;--line:#dfe4e8;--accent:#14532d}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:1050px;margin:40px auto;padding:0 22px}article{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:54px 64px;box-shadow:0 8px 35px rgba(20,30,40,.06)}
+h1{font-size:clamp(2rem,4vw,3.25rem);line-height:1.08;margin:0 0 18px}h2{margin-top:48px;padding-top:18px;border-top:1px solid var(--line);font-size:1.55rem}h3{margin-top:28px}
+.lead{font-size:1.12rem;color:var(--muted)}.abstract{background:#f0fdf4;border-left:5px solid var(--accent);padding:22px 24px;border-radius:10px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:28px 0}.kpi{border:1px solid var(--line);border-radius:12px;padding:18px;background:#fafbfc}.kpi strong{display:block;font-size:1.7rem}.kpi span{color:var(--muted);font-size:.9rem}
+table{width:100%;border-collapse:collapse;margin:20px 0}th,td{padding:11px 12px;border-bottom:1px solid var(--line);text-align:left}th{background:#f5f6f7}
+figure{margin:28px 0}figure img{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:12px}figcaption{color:var(--muted);font-size:.9rem;margin-top:8px}
+code{background:#f1f3f5;padding:2px 5px;border-radius:5px}footer{color:var(--muted);font-size:.92rem;margin-top:42px;padding-top:22px;border-top:1px solid var(--line)}a{color:#14532d}
+@media(max-width:760px){article{padding:30px 22px}.kpis{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body><main><article>
+
+<header>
+<p class="lead">FlyRank ML Internship · Search Intelligence Capstone</p>
+<h1>Predicting Search Visibility Loss: A Client-Held-Out Content Risk Ranking Model</h1>
+<p class="lead">A repeatable decision-support workflow for prioritizing content review from measured February search signals.</p>
+</header>
+
+<h2>Abstract</h2>
+<div class="abstract"><p>This study asks whether February search-performance and content signals can identify content items at higher risk of recording zero measured GSC clicks in March. A Random Forest model was trained using February 2026 signals and evaluated on clients that were completely held out from training. On the held-out validation set, the Random Forest achieved a ROC AUC of 0.778, average precision of 0.172, and Precision@50 of 0.280, compared with 0.554, 0.057, and 0.020 for the W04 hand-written baseline. The strongest model features were February clicks, impressions, zero-click days, position variability, and CTR, indicating that recent search-performance and consistency signals were useful for the tested ranking task. The resulting scores are intended as decision-support signals for prioritizing content review, not as causal explanations of search performance or guarantees that refreshing a page will improve outcomes.</p></div>
+
+<h2>1. Introduction / Problem Statement</h2>
+<p>Search teams may have more content items to review than they can manually inspect. The decision supported here is which eligible content items should be reviewed first because their February search signals suggest a higher risk of recording zero measured GSC clicks in March.</p>
+<p>This is a prioritization problem, not a claim about Google's ranking system. The goal is to produce a ranked decision-support queue that helps a reviewer spend limited review time on pages with the strongest measured risk signals.</p>
+<p><strong>Research question:</strong> Can February search-performance and content signals rank content items by their likelihood of recording zero measured GSC clicks in the following month, and does a Random Forest improve this ranking over the W04 hand-written baseline?</p>
+
+<h2>2. Data</h2>
+<p>The analysis uses the FlyRank ML Internship warehouse release available through the provided Hugging Face dataset. It combines the daily content-performance table with the content dimension table.</p>
+<p>The feature window is <strong>February 1–28, 2026</strong>. February signals are aggregated to one row per client × content item. The label window is <strong>March 1–31, 2026</strong>, and <code>went_dark</code> is defined as zero measured GSC clicks during March.</p>
+<div class="kpis">
+<div class="kpi"><strong>29,700</strong><span>eligible content items</span></div>
+<div class="kpi"><strong>31</strong><span>clients</span></div>
+<div class="kpi"><strong>1,506</strong><span>went-dark positives</span></div>
+<div class="kpi"><strong>5.1%</strong><span>went-dark rate</span></div>
+</div>
+<p>Eligibility required at least 100 February impressions, at least 3 February clicks, usable GSC data, and content published by February 28. March performance is used only to construct the label. Client names, domains, URLs, keywords, private queries, credentials, and other unsafe public-facing fields are not exposed.</p>
+
+<h2>3. Methodology</h2>
+<h3>Features</h3><p>February features include impressions, clicks, CTR, average position, position variability, days with impressions, zero-click days, content age, search volume, competition, CPC, word count, and backlinks.</p>
+<h3>Label</h3><p><code>went_dark = 1</code> when measured GSC clicks in March equal zero. March impressions and clicks are never model inputs.</p>
+<h3>Validation</h3><p>The split is client-held-out: 24 clients are used for training and 7 completely unseen clients for validation. Client overlap is zero. Training and validation positive rates are 4.6% and 5.5%.</p>
+<h3>Leakage control</h3><p>The feature window ends February 28 and the label window starts March 1. Future-window fields are excluded from model inputs, and validation clients are completely separated from training clients.</p>
+
+<h2>4. Results</h2>
+<table><thead><tr><th>Model</th><th>ROC AUC</th><th>Average Precision</th><th>Precision@50</th></tr></thead>
+<tbody><tr><td>W04 hand-written baseline</td><td>0.554</td><td>0.057</td><td>0.020</td></tr><tr><td><strong>Random Forest</strong></td><td><strong>0.778</strong></td><td><strong>0.172</strong></td><td><strong>0.280</strong></td></tr></tbody></table>
+<p>On the same client-held-out validation set, the Random Forest outperformed the hand-written baseline on all three reported ranking metrics. Precision@50 increased from 2.0% to 28.0%.</p>
+<figure><img src="assets/model_vs_baseline.png" alt="Random Forest versus W04 baseline"><figcaption>Model performance on the same client-held-out validation set.</figcaption></figure>
+<figure><img src="assets/feature_importance.png" alt="Top Random Forest feature importances"><figcaption>Top Random Forest features. Importance indicates contribution to the fitted model, not causality.</figcaption></figure>
+<p>The leading features were February clicks, February impressions, zero-click days, position variability, CTR, average position, content age, word count, days with impressions, and search volume.</p>
+
+<h2>5. Limitations &amp; Honest Framing</h2>
+<ul>
+<li>The outcome is zero <em>measured</em> GSC clicks, not proof that a page had no real-world traffic.</li>
+<li>The analysis universe is filtered to content with sufficient February impressions and clicks.</li>
+<li>Random Forest feature importance does not establish causality.</li>
+<li>A high model score does not identify why a page may lose visibility or guarantee that an intervention will work.</li>
+<li>The validation covers one February-to-March window and client-held-out design.</li>
+</ul>
+<p>The results are best treated as <strong>observed, directional decision-support evidence</strong>.</p>
+
+<h2>6. Ranked Recommendations</h2>
+<p>The model scores all 29,700 eligible content items and produces a ranked review queue with human-readable actions and reason codes.</p>
+<table><thead><tr><th>Action</th><th>Items</th><th>Purpose</th></tr></thead>
+<tbody><tr><td>Monitor</td><td>18,739</td><td>Keep under observation without immediate intervention.</td></tr><tr><td>Priority review</td><td>6,031</td><td>Review first because the model assigns higher measured risk.</td></tr><tr><td>Refresh review</td><td>4,930</td><td>Review for possible content refresh where supporting signals justify it.</td></tr></tbody></table>
+<figure><img src="assets/action_mix.png" alt="Ranked recommendation action mix"><figcaption>Distribution of actions in the full ranked recommendation queue.</figcaption></figure>
+<p>The top-ranked recommendations are dominated by pages with many zero-click days, often combined with low February click volume and weak search visibility. These are prioritization cues for human review, not automatic diagnoses.</p>
+
+<h2>7. Reproducibility</h2>
+<p>The complete analysis is implemented in the capstone notebook. It loads the provided warehouse through DuckDB, constructs February features, derives the March outcome, performs client-held-out validation, trains the Random Forest, compares it with the W04 baseline, and generates the ranked recommendation queue and figures.</p>
+<p><a href="https://github.com/deeepanshchandra/flyrank-aiml-internship/blob/main/work/notebooks/capstone.ipynb">Capstone notebook</a> · <a href="https://github.com/deeepanshchandra/flyrank-aiml-internship">Repository</a></p>
+<p>The generated recommendation artifact is <code>work/outputs/capstone_ranked_recommendations.csv</code>. The Hugging Face read token is supplied interactively and is not stored in the notebook.</p>
+
+<h2>8. Acknowledgments &amp; Data Credit</h2>
+<p><strong>Built on the FlyRank ML Internship dataset.</strong></p>
+<p>This capstone was completed as part of the FlyRank ML Internship and uses the provided Search Intelligence warehouse release for educational and research purposes.</p>
+<p><a href="https://flyrank.ai">FlyRank</a></p>
+
+<h2>9. Communication Outputs</h2>
+<h3>5-minute demo outline</h3>
+<ol><li><strong>Problem:</strong> prioritize content review.</li><li><strong>Data:</strong> February signals, March outcome, 29,700 items, 31 clients.</li><li><strong>Model:</strong> compare the W04 baseline with a client-held-out Random Forest.</li><li><strong>Signals:</strong> explain leading feature importance.</li><li><strong>Recommendations:</strong> show the ranked queue and action levels.</li><li><strong>Honest framing:</strong> decision support, not causality or a claim about Google's algorithm.</li></ol>
+<h3>Social-Post Cut</h3><p>Built a search-intelligence capstone that ranks content items by measured risk of recording zero GSC clicks in the following month. A Random Forest evaluated on completely held-out clients achieved 0.778 ROC AUC and 0.280 Precision@50, compared with 0.554 and 0.020 for the hand-written baseline. The result is a practical review queue rather than a causal claim about search rankings.</p>
+<h3>Employer-Facing Summary</h3><p>I built a repeatable search-intelligence pipeline that aggregates February content signals, validates a Random Forest on completely held-out clients, and produces a ranked content-review queue. The model improved Precision@50 from 2.0% for the hand-written baseline to 28.0% on the same validation set. The project demonstrates practical skills in data contracts, leakage control, feature engineering, grouped validation, model evaluation, and decision-support ranking.</p>
+
+<footer>FlyRank ML Internship Capstone · Public-safe research artifact · Results are directional and decision-support oriented.</footer>
+</article></main>
+</body></html>
